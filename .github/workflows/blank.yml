@@ -1,0 +1,105 @@
+name: "Test workflow"
+
+on:
+  # Triggered from another action/request
+  workflow_call:
+    inputs:
+      market:
+        description: One of se, no, dk, fi
+        type: string
+        default: dk
+        required: true
+      appMode:
+        description: One of b2b, b2c
+        type: string
+        default: "b2c"
+        required: true
+      viewport:
+        description: One of mobile, desktop
+        type: string
+        default: "desktop"
+        required: true
+      url:
+        description: The URL to test
+        type: string
+        default: "https://dk-elkjoptest.com"
+        required: true
+  # Run manually
+  workflow_dispatch:
+    inputs:
+      market:
+        description: One of se, no, dk, fi
+        type: choice
+        options:
+          - "se"
+          - "no"
+          - "dk"
+          - "fi"
+        default: dk
+        required: true
+      appMode:
+        description: One of b2b, b2c
+        type: choice
+        default: "b2c"
+        options:
+          - "b2c"
+          - "b2b"
+        required: true
+      viewport:
+        description: One of mobile, desktop
+        type: choice
+        default: "desktop"
+        options:
+          - "desktop"
+          - "mobile"
+        required: true
+      environment:
+        description: Which platform of to run tests on, such as test or prod
+        type: choice
+        default: "test"
+        options:
+          - "test"
+          - "prod"
+          - "dev"
+        required: false
+      testApproach:
+        description: Choose test Approach
+        type: choice
+        default: "regression"
+        options:
+          - "regression"
+          - "smoke"
+          - "functionality"
+        required: true
+      functionality:
+        description: When test approach is Functionality => allowed inputs(; separated) => 'seonavigation, plp, pdp, cms, ratings, cart, checkout, mypage, payment, auth, subscription, promotion, popup, service,  external, delivery'
+        type: string
+        required: false
+      url:
+        description: The URL to test
+        type: string
+        required: false
+jobs:
+  e2e-tests:
+    runs-on:
+      - ecom8core
+    continue-on-error: true
+    strategy:
+      matrix:
+        job: [0, 1, 2, 3, 4]
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+      CY_TEST_FILE: cypress/e2e/validations/test-workflow.spec.ts
+      CY_ENV: CI=true,environment=${{ inputs.environment }},market=${{ inputs.market }},appMode=${{ inputs.appMode }},viewport=${{ inputs.viewport }},userId=uid${{ matrix.job }},testApproach=${{ inputs.testApproach }},grepTags=${{ inputs.functionality }},url=${{ inputs.url }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          repository: elkjopnordic/ecommerce-frontend-e2e-tests
+      - uses: actions/setup-node@v3
+      - name: Copy user accounts from secrets to ".env"
+        run: echo -e "${{ secrets.CI_ENV_FILE }}" > .env
+      - name: Cypress run
+        uses: cypress-io/github-action@v5
+        with:
+          command: npm run cy:run:ci -- --parallel --record --key ${{ secrets.CYPRESS_CLOUD_RECORD_KEY }} --env ${{ env.CY_ENV }}
